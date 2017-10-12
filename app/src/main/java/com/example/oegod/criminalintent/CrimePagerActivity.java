@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
-import android.support.v4.view.MenuItemCompat;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -15,8 +14,8 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 
-import java.util.HashMap;
-import java.util.List;
+import com.oegodf.crime.CrimesMap;
+
 import java.util.UUID;
 
 import butterknife.BindView;
@@ -32,7 +31,7 @@ public class CrimePagerActivity extends AppCompatActivity {
 
     Menu mMenu;
 
-    private CrimesMap mCrimes;
+    private CrimesMap<Crime> mCrimes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -121,7 +120,7 @@ public class CrimePagerActivity extends AppCompatActivity {
     }
 
     public void deleteCurrentCrime(int itemId) {
-        Crime crime = mCrimes.getCrimeByPosition(itemId);
+        Crime crime = (Crime) mCrimes.getCrimeByPosition(itemId);
         CrimeLab crimeLab = CrimeLab.get(getApplicationContext());
         crimeLab.deleteCrime(crime);
         crimeLab.recountCrimes();
@@ -165,7 +164,7 @@ public class CrimePagerActivity extends AppCompatActivity {
 
         @Override
         public Fragment getItem(int position) {
-            Crime crime = mCrimes.getCrimeByPosition(position);
+            Crime crime = (Crime) mCrimes.getCrimeByPosition(position);
             return CrimeFragment.newInstance(crime.getId());
         }
 

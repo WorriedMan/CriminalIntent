@@ -8,6 +8,11 @@
         app:showAsAction="ifRoom|withText"
         />
     <item
+        android:id="@+id/settings"
+        android:title="@string/settings"
+        app:showAsAction="never"
+        />
+    <item
         android:id="@+id/show_subtitle"
         android:title="@string/show_subtitle"
         app:showAsAction="ifRoom"/>

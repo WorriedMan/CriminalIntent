@@ -1,7 +1,5 @@
 package com.example.oegod.criminalintent;
 
-import android.util.Log;
-
 import java.util.Comparator;
 
 /**

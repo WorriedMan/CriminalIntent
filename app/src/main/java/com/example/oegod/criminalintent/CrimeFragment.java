@@ -20,7 +20,6 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.TimePicker;
 
 import java.util.Date;
 import java.util.UUID;
@@ -58,10 +57,10 @@ public class CrimeFragment extends Fragment {
     Button mCrimeTimeButton;
     @BindView(R.id.needPoliceCheckBox)
     CheckBox mNeedPoliceCheckBox;
-    @BindView(R.id.chooseSuspectButton)
-    CheckBox mSuspectButton;
-    @BindView(R.id.sendReportButton)
-    CheckBox mSendReportButton;
+//    @BindView(R.id.chooseSuspectButton)
+//    CheckBox mSuspectButton;
+//    @BindView(R.id.sendReportButton)
+//    CheckBox mSendReportButton;
 
     private static final String ARG_CRIME_ID = "crime_id";
 

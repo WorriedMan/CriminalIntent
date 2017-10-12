@@ -1,4 +1,4 @@
-package com.example.oegod.criminalintent;
+package com.example.oegod.criminalintent.exceptions;
 
 /**
  * Created by oegod on 13.09.2017.

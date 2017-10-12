@@ -1,9 +1,6 @@
 package com.example.oegod.criminalintent;
 
-import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
-import android.nfc.Tag;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -19,11 +16,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
-import java.util.HashMap;
-import java.util.List;
+import com.example.oegod.criminalintent.socket.ConnectionWorker;
+import com.oegodf.crime.CrimesMap;
+
 import java.util.UUID;
+
+import io.reactivex.Observable;
+import io.reactivex.Observer;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.schedulers.Schedulers;
 
 /**
  * Created by oegod on 22.08.2017.
@@ -42,6 +44,7 @@ public class CrimeListFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
+        Log.d("DEBUG", "onCreate Frag");
     }
 
     @Nullable
@@ -58,13 +61,6 @@ public class CrimeListFragment extends Fragment {
         mAddCrimeButton = v.findViewById(R.id.addCrimeOnNotFound);
         mTextViewCrimesNotFound = v.findViewById(R.id.crimesNotFoundLabel);
         mAddCrimeButton.setOnClickListener((view) -> createNewCrime());
-//        mAddCrimeButton.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//                createNewCrime();
-//            }
-//        });
-
         updateUI();
 
         return v;
@@ -82,10 +78,10 @@ public class CrimeListFragment extends Fragment {
         outState.putBoolean(SAVED_SUBTITLE_VISIBLE, mSubtitleVisible);
     }
 
-    private void updateUI() {
+    void updateUI() {
         CrimeLab crimeLab = CrimeLab.get(getActivity());
         crimeLab.invalidateCrimes();
-        CrimesMap crimes = crimeLab.getCrimes();
+        CrimesMap<Crime> crimes = crimeLab.getCrimes();
         if (mAdapter == null) {
             mAdapter = new CrimeAdapter(crimes, this);
             mCrimeRecyclerView.setAdapter(mAdapter);
@@ -107,7 +103,6 @@ public class CrimeListFragment extends Fragment {
 
     public void crimeClicked(Crime crime) {
         startActivity(CrimePagerActivity.newIntent(getActivity(), crime.getId()));
-//        startActivityForResult(CrimePagerActivity.newIntent(getActivity(),crime.getId()), REQUEST_CRIME);
     }
 
     @Override
@@ -139,6 +134,10 @@ public class CrimeListFragment extends Fragment {
             case R.id.new_crime:
                 createNewCrime();
                 return true;
+            case R.id.settings:
+                Intent intent = new Intent(getActivity(), SettingsActivity.class);
+                startActivity(intent);
+                return true;
             case R.id.show_subtitle:
                 mSubtitleVisible = !mSubtitleVisible;
                 showSubitle();
@@ -169,16 +168,13 @@ public class CrimeListFragment extends Fragment {
     }
 
     private class CrimeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-
-        private CrimesMap mCrimes;
-
+        private CrimesMap<Crime> mCrimes;
         private Fragment mFragment;
 
-        public CrimeAdapter(CrimesMap crimes, Fragment fragment) {
+        CrimeAdapter(CrimesMap<Crime> crimes, Fragment fragment) {
             mCrimes = crimes;
             mFragment = fragment;
         }
-
 
         @Override
         public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -193,7 +189,7 @@ public class CrimeListFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(final RecyclerView.ViewHolder holder, int position) {
-            Crime crime = mCrimes.getCrimeByPosition(position);
+            Crime crime = (Crime) mCrimes.getCrimeByPosition(position);
             switch (holder.getItemViewType()) {
                 case 0:
                     CrimeHolder crimeHolder = (CrimeHolder) holder;
@@ -214,14 +210,14 @@ public class CrimeListFragment extends Fragment {
 
         @Override
         public int getItemViewType(int position) {
-            Crime crime = mCrimes.getCrimeByPosition(position);
+            Crime crime = (Crime) mCrimes.getCrimeByPosition(position);
             if (crime == null) {
                 return 0;
             }
             return crime.isNeedPolice() ? 1 : 0;
         }
 
-        public void setCrimes(CrimesMap crimes) {
+        public void setCrimes(CrimesMap<Crime> crimes) {
             mCrimes = crimes;
         }
     }

@@ -4,20 +4,20 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.preference.PreferenceFragment;
+import android.util.Log;
 
 import com.example.oegod.criminalintent.database.CrimeBaseHelper;
 import com.example.oegod.criminalintent.database.CrimeDbSchema;
 import com.example.oegod.criminalintent.database.CursorCrimeWrapper;
+import com.example.oegod.criminalintent.socket.ConnectionWorker;
+import com.oegodf.crime.CrimeBase;
+import com.oegodf.crime.CrimesMap;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -25,39 +25,82 @@ import java.util.UUID;
  */
 
 public class CrimeLab {
-    private static CrimeLab sCrimeLab;
-
-    private CrimesMap mCrimes;
-    private Context mContext;
+    private static volatile CrimeLab sInstance;
+    private static ConnectionWorker sSocketWorker;
+    private CrimesMap<Crime> mCrimes;
     private SQLiteDatabase mDatabase;
 
+    enum Connection {
+        SOCKET,
+        SQLITE,
+        HTTP;
+    }
+
+    static Connection sConnection = Connection.SOCKET;
+
     static CrimeLab get(Context context) {
-        if (sCrimeLab == null) {
-            sCrimeLab = new CrimeLab(context);
+        CrimeLab localInstance = get();
+        localInstance.loadDatabase(context);
+        return localInstance;
+    }
+
+    static CrimeLab get(ConnectionWorker worker) {
+        CrimeLab localInstance = get();
+        if (sConnection == Connection.SOCKET) {
+            sSocketWorker = worker;
+        } else {
+            sSocketWorker = null;
         }
-        return sCrimeLab;
+        return localInstance;
     }
 
-    private CrimeLab(Context context) {
-        mContext = context;
-        mDatabase = new CrimeBaseHelper(mContext)
-                .getWritableDatabase();
-        mCrimes = loadCrimes();
-        recountCrimes();
-    }
-
-    private CrimesMap loadCrimes() {
-        CrimesMap crimes = new CrimesMap();
-        CursorCrimeWrapper cursor = queryCrimes(null, null);
-        try {
-            cursor.moveToFirst();
-            while (!cursor.isAfterLast()) {
-                Crime crime = cursor.getCrime();
-                crimes.put(crime.getId(), crime);
-                cursor.moveToNext();
+    static CrimeLab get() {
+        CrimeLab localInstance = sInstance;
+        if (localInstance == null) {
+            synchronized (CrimeLab.class) {
+                localInstance = sInstance;
+                if (localInstance == null) {
+                    sInstance = localInstance = new CrimeLab();
+                }
             }
-        } finally {
-            cursor.close();
+        }
+        return localInstance;
+    }
+
+    private void loadDatabase(Context context) {
+        if (sConnection == Connection.SQLITE) {
+            if (mDatabase == null) {
+                mDatabase = new CrimeBaseHelper(context)
+                        .getWritableDatabase();
+                mCrimes = loadCrimes();
+                recountCrimes();
+            }
+        } else {
+            if (mDatabase != null) {
+                mDatabase.close();
+                mDatabase = null;
+            }
+        }
+    }
+
+    private CrimeLab() {
+        mCrimes = new CrimesMap<>();
+    }
+
+    private CrimesMap<Crime> loadCrimes() {
+        CrimesMap<Crime> crimes = new CrimesMap<>();
+        if (sConnection == Connection.SQLITE) {
+            CursorCrimeWrapper cursor = queryCrimes(null, null);
+            try {
+                cursor.moveToFirst();
+                while (!cursor.isAfterLast()) {
+                    Crime crime = cursor.getCrime();
+                    crimes.put(crime.getId(), crime);
+                    cursor.moveToNext();
+                }
+            } finally {
+                cursor.close();
+            }
         }
         return crimes;
     }
@@ -76,20 +119,35 @@ public class CrimeLab {
     }
 
     void addCrime(Crime c) {
-        ContentValues values = getContentValues(c);
-        mDatabase.insert(CrimeDbSchema.CrimeTable.NAME, null, values);
+        switch (sConnection) {
+            case SQLITE:
+                ContentValues values = getContentValues(c);
+                mDatabase.insert(CrimeDbSchema.CrimeTable.NAME, null, values);
+                break;
+            case SOCKET:
+                sSocketWorker.sendCommand("ADD", c);
+                break;
+        }
     }
 
     public void deleteCrime(Crime c) {
-        mDatabase.delete(CrimeDbSchema.CrimeTable.NAME, CrimeDbSchema.CrimeTable.Cols.UUID + " = ?", new String[]{c.getId().toString()});
+        if (sConnection == Connection.SQLITE) {
+            mDatabase.delete(CrimeDbSchema.CrimeTable.NAME, CrimeDbSchema.CrimeTable.Cols.UUID + " = ?", new String[]{c.getId().toString()});
+        } else {
+
+        }
         mCrimes.remove(c.getId());
     }
 
-    CrimesMap getCrimes() {
+    void setCrimes(CrimesMap<Crime> crimes) {
+        mCrimes = crimes;
+    }
+
+    CrimesMap<Crime> getCrimes() {
         return getCrimes(false);
     }
 
-    CrimesMap getCrimes(boolean newCrime) {
+    CrimesMap<Crime> getCrimes(boolean newCrime) {
         if (newCrime) {
             Crime crime = new Crime(UUID.randomUUID(), true);
             crime.setPosition(mCrimes.size());
@@ -98,31 +156,36 @@ public class CrimeLab {
         return mCrimes;
     }
 
-    public void updateCrime(Crime crime) {
-        String uuidString = crime.getId().toString();
-        ContentValues values = getContentValues(crime);
-
-        mDatabase.update(CrimeDbSchema.CrimeTable.NAME, values, CrimeDbSchema.CrimeTable.Cols.UUID + " = ?", new String[]{uuidString});
+    void updateCrime(Crime crime) {
+        if (sConnection == Connection.SQLITE) {
+            String uuidString = crime.getId().toString();
+            ContentValues values = getContentValues(crime);
+            mDatabase.update(CrimeDbSchema.CrimeTable.NAME, values, CrimeDbSchema.CrimeTable.Cols.UUID + " = ?", new String[]{uuidString});
+        } else if (sConnection == Connection.SOCKET) {
+            sSocketWorker.sendCommand("UPDATS",crime);
+        }
     }
 
     Crime getCrime(UUID id) {
-        return mCrimes.get(id);
+        return (Crime) mCrimes.get(id);
     }
 
     public void invalidateCrimes() {
-        for (Map.Entry<UUID, Crime> e : mCrimes.entrySet()) {
-            Crime crime = e.getValue();
-            if (Objects.equals(crime.getTitle(), "")) {
-                deleteCrime(crime);
-            } else {
-                crime.setNewCrime(false);
+        if (mCrimes != null) {
+            for (Map.Entry<UUID, CrimeBase> e : mCrimes.entrySet()) {
+                Crime crime = (Crime) e.getValue();
+                if (Objects.equals(crime.getTitle(), "")) {
+                    deleteCrime(crime);
+                } else {
+                    crime.setNewCrime(false);
+                }
             }
+            recountCrimes();
         }
-        recountCrimes();
     }
 
     public void recountCrimes() {
-        ArrayList<Crime> tempList = new ArrayList<>(mCrimes.values());
+        ArrayList<Crime> tempList = mCrimes.getCrimesList(Crime.class);
         Collections.sort(tempList, new CrimeComparator(CrimeComparator.SORT_TYPE_POSITION));
         int index = 0;
         for (Crime crime :
